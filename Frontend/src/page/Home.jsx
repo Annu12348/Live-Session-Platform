@@ -50,5 +50,6 @@ const Home = () => {
 };
 
 export default Home;
-//12:00 to 12:30 = 30minat
-//4:00 to
+//12:00 to 12:30 = 30Minat
+//4:00 to 5:50 = 1:50Minat
+//11:30 to 
