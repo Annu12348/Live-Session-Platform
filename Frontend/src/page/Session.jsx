@@ -176,9 +176,10 @@ const Session = () => {
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4">
       <div className="bg-white shadow-xl rounded-2xl p-6 w-full max-w-4xl text-center">
+      <h1>student live session</h1>
         {!joined ? (
           <>
-            <h1 className="text-3xl font-bold mb-2">Join Live Session</h1>
+            <h1 className="text-3xl font-bold mb-2">student Join Live Session</h1>
             <p className="text-gray-600 mb-5">
               You are invited to join <b>{sessionData.type}</b>’s session.
             </p>
