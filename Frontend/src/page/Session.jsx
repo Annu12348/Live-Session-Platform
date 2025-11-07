@@ -21,6 +21,7 @@ const Session = () => {
   const [muted, setMuted] = useState(false);
   const [playing, setPlaying] = useState(true);
   const [cameraOff, setCameraOff] = useState(false);
+  const [teacherCameraOff, setTeacherCameraOff] = useState(false);
 
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
@@ -50,6 +51,11 @@ const Session = () => {
     const socket = io("https://live-session-platform.onrender.com");
     socketRef.current = socket;
 
+    socket.on("teacher-camera-toggle", ({ isCameraOn }) => {
+      setTeacherCameraOff(!isCameraOn);
+      if (!isCameraOn) remoteVideoRef.current.srcObject = null;
+    });
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
@@ -64,7 +70,11 @@ const Session = () => {
       stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
       pc.ontrack = (event) => {
-        remoteVideoRef.current.srcObject = event.streams[0];
+        if (!teacherCameraOff) {
+          remoteVideoRef.current.srcObject = event.streams[0];
+        } else {
+          remoteVideoRef.current.srcObject = null;
+        }
       };
 
       pc.onicecandidate = (event) => {
@@ -103,21 +113,46 @@ const Session = () => {
     );
     setMuted(!muted);
   };
-  const toggleCamera = () => {
-    localStreamRef.current.getVideoTracks().forEach(
-      (track) => (track.enabled = !track.enabled)
-    );
-    setCameraOff(!cameraOff);
+
+  const toggleCamera = async () => {
+    if (!localStreamRef.current) return;
+
+    const videoTrack = localStreamRef.current.getVideoTracks()[0];
+    if (!videoTrack) return;
+
+    if (cameraOff) {
+      // Turn camera ON
+      videoTrack.enabled = true;
+      localVideoRef.current.srcObject = null;
+      localVideoRef.current.srcObject = localStreamRef.current;
+    } else {
+      // Turn camera OFF
+      videoTrack.enabled = false;
+    }
+
+    const newState = !cameraOff;
+    setCameraOff(newState);
+
+    // Notify teacher
+    socketRef.current.emit("student-camera-toggle", { isCameraOn: !newState });
   };
+
   const togglePlay = () => {
     if (playing) localVideoRef.current.pause();
     else localVideoRef.current.play();
     setPlaying(!playing);
   };
+
   const toggleFullScreen = (ref) => {
     if (ref.current.requestFullscreen) ref.current.requestFullscreen();
   };
-  const leaveSession = () => (window.location.href = "/");
+
+  const leaveSession = () => {
+    if (peerRef.current) peerRef.current.close();
+    if (localStreamRef.current)
+      localStreamRef.current.getTracks().forEach((t) => t.stop());
+    window.location.href = "/";
+  };
 
   if (loading) return <h2 className="text-center mt-10">Loading session...</h2>;
   if (!sessionData)
@@ -142,19 +177,38 @@ const Session = () => {
         ) : (
           <>
             <div className="relative grid grid-cols-1 md:grid-cols-2 gap-4">
-              {[localVideoRef, remoteVideoRef].map((ref, i) => (
-                <div key={i} className="relative">
-                  <video
-                    ref={ref}
-                    autoPlay
-                    playsInline
-                    muted={i === 0}
-                    className="rounded-lg bg-black w-full h-60 md:h-80 object-cover"
-                  />
-                </div>
-              ))}
+              {/* Local Video */}
+              <div className="relative">
+                <video
+                  ref={localVideoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="rounded-lg bg-black w-full h-60 md:h-80 object-cover"
+                />
+                {cameraOff && (
+                  <div className="absolute inset-0 bg-gray-800 flex items-center justify-center text-white text-lg">
+                    Camera Off
+                  </div>
+                )}
+              </div>
 
-             
+              {/* Remote Video */}
+              <div className="relative">
+                <video
+                  ref={remoteVideoRef}
+                  autoPlay
+                  playsInline
+                  className="rounded-lg bg-black w-full h-60 md:h-80 object-cover"
+                />
+                {teacherCameraOff && (
+                  <div className="absolute inset-0 bg-gray-800 flex items-center justify-center text-white text-lg">
+                    Teacher Camera Off
+                  </div>
+                )}
+              </div>
+
+              {/* Controls */}
               <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black/50 p-3 rounded-xl flex gap-5 justify-center items-center">
                 <button onClick={toggleMute} className="text-white text-xl">
                   {muted ? <FaVolumeMute /> : <FaVolumeUp />}

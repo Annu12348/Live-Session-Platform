@@ -8,7 +8,6 @@ const Router = () => {
     <Routes>
       <Route path='/' element={<Home />} />
       <Route path='/session/:unique_id' element={<Session />} />
-      
     </Routes>
   )
 }
