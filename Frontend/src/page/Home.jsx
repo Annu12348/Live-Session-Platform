@@ -1,4 +1,4 @@
-{/*import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { io } from "socket.io-client";
 
@@ -12,27 +12,46 @@ const Home = () => {
   const localStreamRef = useRef(null);
   const peerRef = useRef(null);
 
+  const isLocalhost =
+    typeof window !== "undefined" &&
+    (window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1");
+
+  const SOCKET_BASE_URL =
+    import.meta.env.VITE_SOCKET_URL ||
+    (isLocalhost
+      ? "http://localhost:5000"
+      : "https://live-session-platform.onrender.com");
+
+  const API_BASE_URL =
+    import.meta.env.VITE_API_BASE_URL ||
+    (isLocalhost
+      ? "http://localhost:5000"
+      : "https://live-session-platform.onrender.com");
+
   useEffect(() => {
-    const newSocket = io("https://live-session-platform.onrender.com");
+    const newSocket = io(SOCKET_BASE_URL, { transports: ["websocket"] });
     setSocket(newSocket);
 
     return () => {
+      newSocket.removeAllListeners();
       newSocket.disconnect();
       if (peerRef.current) peerRef.current.close();
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach((track) => track.stop());
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleStartSession = async () => {
     try {
       setLoading(true);
       const unique_id = Math.random().toString(36).substring(2, 10);
-      const userurl = `https://live-session-platforms.onrender.com/session/${unique_id}`;
+      const userurl = `${window.location.origin}/session/${unique_id}`;
 
       const response = await axios.post(
-        "https://live-session-platform.onrender.com/live-session/teacher/start-session",
+        `${API_BASE_URL}/live-session/teacher/start-session`,
         {
           type: "teacher",
           unique_id,
@@ -68,7 +87,9 @@ const Home = () => {
       stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
       pc.ontrack = (event) => {
-        remoteVideoRef.current.srcObject = event.streams[0];
+        if (remoteVideoRef.current) {
+          remoteVideoRef.current.srcObject = event.streams[0];
+        }
       };
 
       pc.onicecandidate = (event) => {
@@ -80,6 +101,8 @@ const Home = () => {
         }
       };
 
+      socket.emit("join-session", session.unique_id);
+
       const handleIce = async ({ candidate }) => {
         try {
           await pc.addIceCandidate(new RTCIceCandidate(candidate));
@@ -87,16 +110,31 @@ const Home = () => {
           console.error(err);
         }
       };
+      socket.off("ice-candidate");
       socket.on("ice-candidate", handleIce);
 
       const handleAnswer = async ({ answer }) => {
         await pc.setRemoteDescription(new RTCSessionDescription(answer));
       };
+      socket.off("answer");
       socket.on("answer", handleAnswer);
 
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      socket.emit("offer", { sessionId: session.unique_id, offer });
+      const handleReadyForOffer = async () => {
+        try {
+          if (pc.signalingState !== "stable") return;
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          socket.emit("offer", { sessionId: session.unique_id, offer });
+        } catch (error) {
+          console.error("Failed to create offer", error);
+        }
+      };
+
+      socket.off("ready-for-offer");
+      socket.on("ready-for-offer", handleReadyForOffer);
+
+      // In case the student is already waiting
+      await handleReadyForOffer();
     } catch (err) {
       if (err.name === "NotAllowedError") {
         alert("❌ Please allow access to camera and microphone!");
@@ -157,169 +195,13 @@ const Home = () => {
                   ref={localVideoRef}
                   autoPlay
                   muted
+                  playsInline
                   className="w-1/2 rounded-lg"
                 />
                 <video
                   ref={remoteVideoRef}
                   autoPlay
-                  className="w-1/2 rounded-lg"
-                />
-              </div>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-};
-
-export default Home;
-*/}
-
-
-import React, { useEffect, useRef, useState } from "react";
-import axios from "axios";
-import { io } from "socket.io-client";
-
-const Home = () => {
-  const [loading, setLoading] = useState(false);
-  const [session, setSession] = useState(null);
-  const [socket, setSocket] = useState(null);
-  const [callStarted, setCallStarted] = useState(false);
-
-  const localVideoRef = useRef(null);
-  const remoteVideoRef = useRef(null);
-  const localStreamRef = useRef(null);
-  const peerRef = useRef(null);
-
-  useEffect(() => {
-    const newSocket = io("https://live-session-platform.onrender.com");
-    setSocket(newSocket);
-
-    newSocket.on("student-joined", () => {
-      console.log("✅ Student joined session");
-      if (!callStarted) startVideoCall();
-    });
-
-    return () => {
-      newSocket.disconnect();
-      if (peerRef.current) peerRef.current.close();
-      if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach((t) => t.stop());
-      }
-    };
-  }, [callStarted]);
-
-  const handleStartSession = async () => {
-    try {
-      setLoading(true);
-      const unique_id = Math.random().toString(36).substring(2, 10);
-      const userurl = `https://live-session-platforms.onrender.com/session/${unique_id}`;
-
-      const res = await axios.post(
-        "https://live-session-platform.onrender.com/live-session/teacher/start-session",
-        { type: "teacher", unique_id, userurl }
-      );
-      setSession(res.data.data);
-      alert("✅ Session created successfully!");
-    } catch (err) {
-      alert("❌ Failed to create session");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const startVideoCall = async () => {
-    if (!socket || !session) return;
-
-    setCallStarted(true);
-
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: true,
-      audio: true,
-    });
-
-    localStreamRef.current = stream;
-    localVideoRef.current.srcObject = stream;
-
-    const pc = new RTCPeerConnection();
-    peerRef.current = pc;
-
-    stream.getTracks().forEach((track) => pc.addTrack(track, stream));
-
-    pc.ontrack = (event) => {
-      remoteVideoRef.current.srcObject = event.streams[0];
-    };
-
-    pc.onicecandidate = (event) => {
-      if (event.candidate) {
-        socket.emit("ice-candidate", {
-          candidate: event.candidate,
-          sessionId: session.unique_id,
-        });
-      }
-    };
-
-    socket.on("ice-candidate", async ({ candidate }) => {
-      await pc.addIceCandidate(new RTCIceCandidate(candidate));
-    });
-
-    socket.on("answer", async ({ answer }) => {
-      await pc.setRemoteDescription(new RTCSessionDescription(answer));
-    });
-
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    socket.emit("offer", { sessionId: session.unique_id, offer });
-  };
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(session?.userurl);
-    alert("Copied to clipboard!");
-  };
-
-  return (
-    <div className="w-full h-full items-center justify-center p-5 flex">
-      <div className="shadow bg-zinc-50 w-full max-w-xl py-3 pb-5 px-5 flex flex-col items-center justify-center rounded-lg">
-        <h1 className="text-4xl font-bold capitalize">Start Live Session</h1>
-
-        <button
-          onClick={handleStartSession}
-          disabled={loading}
-          className="text-md mt-6 uppercase bg-blue-600 px-4 py-3 font-bold text-white rounded-lg"
-        >
-          {loading ? "Creating..." : "Start Session"}
-        </button>
-
-        {session && (
-          <>
-            <div className="w-full mt-6">
-              <label className="font-bold text-md">Session URL</label>
-              <div className="flex border border-zinc-200 pr-3 pl-1.5 rounded-lg items-center">
-                <input
-                  type="text"
-                  value={session.userurl}
-                  readOnly
-                  className="border-r outline-none py-2 w-full bg-transparent"
-                />
-                <button
-                  onClick={handleCopy}
-                  className="pl-3 font-semibold text-blue-600 hover:underline"
-                >
-                  Copy
-                </button>
-              </div>
-
-              <div className="mt-4 flex gap-2">
-                <video
-                  ref={localVideoRef}
-                  autoPlay
-                  muted
-                  className="w-1/2 rounded-lg"
-                />
-                <video
-                  ref={remoteVideoRef}
-                  autoPlay
+                  playsInline
                   className="w-1/2 rounded-lg"
                 />
               </div>
