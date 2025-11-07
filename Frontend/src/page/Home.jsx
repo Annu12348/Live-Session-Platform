@@ -43,6 +43,7 @@ const Home = () => {
         }
       );
 
+      console.log(response.data.data)
       setSession(response.data.data);
       alert("✅ Session created successfully!");
     } catch (error) {
