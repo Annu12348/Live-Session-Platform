@@ -30,9 +30,17 @@ const Home = () => {
     const newSocket = io("https://live-session-platform.onrender.com");
     setSocket(newSocket);
 
-    // Student camera toggle listener
+    // Listen for student camera toggle
     newSocket.on("student-camera-toggle", ({ isCameraOn }) => {
       if (!isCameraOn) remoteVideoRef.current.srcObject = null;
+    });
+
+    // Listen for student play/pause (optional)
+    newSocket.on("video-toggle", ({ isPlaying }) => {
+      if (remoteVideoRef.current) {
+        if (isPlaying) remoteVideoRef.current.play().catch(() => {});
+        else remoteVideoRef.current.pause();
+      }
     });
 
     return () => {
@@ -136,21 +144,10 @@ const Home = () => {
     const videoTrack = localStreamRef.current.getVideoTracks()[0];
     if (!videoTrack) return;
 
-    if (cameraOff) {
-      // Camera ON
-      videoTrack.enabled = true;
-      localVideoRef.current.srcObject = null;
-      localVideoRef.current.srcObject = localStreamRef.current;
-    } else {
-      // Camera OFF
-      videoTrack.enabled = false;
-      localVideoRef.current.srcObject = null; // hide teacher video
-    }
-
     const newState = !cameraOff;
     setCameraOff(newState);
 
-    // Notify student
+    videoTrack.enabled = newState ? false : true;
     socket.emit("teacher-camera-toggle", { isCameraOn: !newState });
   };
 
@@ -158,22 +155,22 @@ const Home = () => {
     if (playing) localVideoRef.current.pause();
     else localVideoRef.current.play();
     setPlaying(!playing);
+
+    if (socket && session) {
+      socket.emit("video-toggle", { isPlaying: !playing, sessionId: session.unique_id });
+    }
   };
 
   const toggleFullScreen = (ref) => {
     if (!ref.current) return;
-
     if (!document.fullscreenElement) {
       ref.current.requestFullscreen().catch((err) => console.error(err));
     } else {
       document.exitFullscreen().catch((err) => console.error(err));
     }
 
-    // Fix video freeze after fullscreen exit
     setTimeout(() => {
-      if (ref.current && ref.current.paused) {
-        ref.current.play().catch(() => {});
-      }
+      if (ref.current && ref.current.paused) ref.current.play().catch(() => {});
     }, 100);
   };
 
@@ -239,7 +236,6 @@ const Home = () => {
                 </div>
               ))}
 
-              {/* Floating Control Bar */}
               <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black/50 p-3 rounded-xl flex gap-5 justify-center items-center">
                 <button onClick={toggleMute} className="text-white text-xl">
                   {muted ? <FaVolumeMute /> : <FaVolumeUp />}
@@ -268,4 +264,4 @@ const Home = () => {
   );
 };
 
-export default Home; 
+export default Home;

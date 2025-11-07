@@ -58,6 +58,14 @@ const Session = () => {
       if (!isCameraOn) remoteVideoRef.current.srcObject = null;
     });
 
+    // Listen for teacher play/pause
+    socket.on("video-toggle", ({ isPlaying }) => {
+      if (remoteVideoRef.current) {
+        if (isPlaying) remoteVideoRef.current.play().catch(() => {});
+        else remoteVideoRef.current.pause();
+      }
+    });
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
@@ -121,21 +129,10 @@ const Session = () => {
     const videoTrack = localStreamRef.current.getVideoTracks()[0];
     if (!videoTrack) return;
 
-    if (cameraOff) {
-      // Camera ON
-      videoTrack.enabled = true;
-      localVideoRef.current.srcObject = null;
-      localVideoRef.current.srcObject = localStreamRef.current;
-    } else {
-      // Camera OFF
-      videoTrack.enabled = false;
-      localVideoRef.current.srcObject = null;
-    }
-
     const newState = !cameraOff;
     setCameraOff(newState);
+    videoTrack.enabled = newState ? false : true;
 
-    // Notify teacher
     socketRef.current.emit("student-camera-toggle", { isCameraOn: !newState });
   };
 
@@ -143,22 +140,20 @@ const Session = () => {
     if (playing) localVideoRef.current.pause();
     else localVideoRef.current.play();
     setPlaying(!playing);
+
+    socketRef.current.emit("video-toggle", { isPlaying: !playing, sessionId: sessionData.unique_id });
   };
 
   const toggleFullScreen = (ref) => {
     if (!ref.current) return;
-
     if (!document.fullscreenElement) {
       ref.current.requestFullscreen().catch((err) => console.error(err));
     } else {
       document.exitFullscreen().catch((err) => console.error(err));
     }
 
-    // Fix video freeze after fullscreen exit
     setTimeout(() => {
-      if (ref.current && ref.current.paused) {
-        ref.current.play().catch(() => {});
-      }
+      if (ref.current && ref.current.paused) ref.current.play().catch(() => {});
     }, 100);
   };
 
@@ -176,7 +171,6 @@ const Session = () => {
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4">
       <div className="bg-white shadow-xl rounded-2xl p-6 w-full max-w-4xl text-center">
-      
         {!joined ? (
           <>
             <h1 className="text-3xl font-bold mb-2">Student Join Live Session</h1>
@@ -192,11 +186,8 @@ const Session = () => {
           </>
         ) : (
           <>
-            <h1 className="text-3xl font-bold mb-6">
-              Student Live Session
-            </h1>
+            <h1 className="text-3xl font-bold mb-6">Student Live Session</h1>
             <div className="relative grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Local Video */}
               <div className="relative">
                 <video
                   ref={localVideoRef}
@@ -212,7 +203,6 @@ const Session = () => {
                 )}
               </div>
 
-              {/* Remote Video */}
               <div className="relative">
                 <video
                   ref={remoteVideoRef}
@@ -227,7 +217,6 @@ const Session = () => {
                 )}
               </div>
 
-              {/* Controls */}
               <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black/50 p-3 rounded-xl flex gap-5 justify-center items-center">
                 <button onClick={toggleMute} className="text-white text-xl">
                   {muted ? <FaVolumeMute /> : <FaVolumeUp />}
