@@ -162,6 +162,7 @@ const Session = () => {
 export default Session;
 */}
 
+
 import React, { useEffect, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import axios from "axios";
@@ -170,17 +171,16 @@ import { io } from "socket.io-client";
 const Session = () => {
   const { unique_id } = useParams();
   const [sessionData, setSessionData] = useState(null);
+  const [joined, setJoined] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [joined, setJoined] = useState(false);
 
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
+  const localStreamRef = useRef(null);
   const peerRef = useRef(null);
   const socketRef = useRef(null);
-  const localStreamRef = useRef(null);
 
-  // 🔹 Fetch Session Data
   useEffect(() => {
     const fetchSession = async () => {
       try {
@@ -198,61 +198,48 @@ const Session = () => {
     fetchSession();
   }, [unique_id]);
 
-  // 🔹 Join Session (only when user clicks button)
   const handleJoinSession = async () => {
-    if (!sessionData) return;
-
     setJoined(true);
     const socket = io("https://live-session-platform.onrender.com");
     socketRef.current = socket;
 
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true,
-      });
+    socket.emit("join-session", unique_id);
 
-      localStreamRef.current = stream;
-      localVideoRef.current.srcObject = stream;
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: true,
+      audio: true,
+    });
 
-      const pc = new RTCPeerConnection();
-      peerRef.current = pc;
+    localStreamRef.current = stream;
+    localVideoRef.current.srcObject = stream;
 
-      stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+    const pc = new RTCPeerConnection();
+    peerRef.current = pc;
+    stream.getTracks().forEach((t) => pc.addTrack(t, stream));
 
-      pc.ontrack = (event) => {
-        remoteVideoRef.current.srcObject = event.streams[0];
-      };
+    pc.ontrack = (event) => {
+      remoteVideoRef.current.srcObject = event.streams[0];
+    };
 
-      pc.onicecandidate = (event) => {
-        if (event.candidate) {
-          socket.emit("ice-candidate", {
-            candidate: event.candidate,
-            sessionId: sessionData.unique_id,
-          });
-        }
-      };
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        socket.emit("ice-candidate", {
+          candidate: event.candidate,
+          sessionId: unique_id,
+        });
+      }
+    };
 
-      socket.emit("join-session", sessionData.unique_id);
+    socket.on("offer", async ({ offer }) => {
+      await pc.setRemoteDescription(new RTCSessionDescription(offer));
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      socket.emit("answer", { sessionId: unique_id, answer });
+    });
 
-      socket.on("offer", async ({ offer }) => {
-        await pc.setRemoteDescription(new RTCSessionDescription(offer));
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        socket.emit("answer", { sessionId: sessionData.unique_id, answer });
-      });
-
-      socket.on("ice-candidate", async ({ candidate }) => {
-        try {
-          await pc.addIceCandidate(new RTCIceCandidate(candidate));
-        } catch (err) {
-          console.error(err);
-        }
-      });
-    } catch (err) {
-      alert("Please allow access to camera and microphone.");
-      console.error(err);
-    }
+    socket.on("ice-candidate", async ({ candidate }) => {
+      await pc.addIceCandidate(new RTCIceCandidate(candidate));
+    });
   };
 
   if (loading) return <h2 className="text-center mt-10">Loading...</h2>;
@@ -296,10 +283,10 @@ const Session = () => {
 
             <div className="w-full">
               <h3 className="mt-2 font-bold text-xl">
-                Session ID: {sessionData.unique_id}
+                Session ID: {sessionData?.unique_id}
               </h3>
               <p className="text-sm font-semibold mt-1 mb-2">
-                You have joined {sessionData.type}’s session.
+                You have joined {sessionData?.type}’s session.
               </p>
             </div>
 
