@@ -32,7 +32,7 @@ const Home = () => {
     try {
       setLoading(true);
       const unique_id = Math.random().toString(36).substring(2, 10);
-      const userurl = `http://localhost:5173/session/${unique_id}`;
+      const userurl = `https://live-session-platforms.onrender.com/session/${unique_id}`;
 
       const response = await axios.post(
         "https://live-session-platform.onrender.com/live-session/teacher/start-session",
