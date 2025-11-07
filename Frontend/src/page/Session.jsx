@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+{/*import React, { useEffect, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import axios from "axios";
 import { io } from "socket.io-client";
@@ -149,6 +149,156 @@ const Session = () => {
             <Link
               to="/"
               className="bg-zinc-200 w-full text-center mt-3 py-4 rounded uppercase font-semibold"
+            >
+              Leave Session
+            </Link>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default Session;
+*/}
+import React, { useEffect, useRef, useState } from "react";
+import { useParams, Link } from "react-router-dom";
+import axios from "axios";
+import { io } from "socket.io-client";
+
+const Session = () => {
+  const { unique_id } = useParams();
+  const [sessionData, setSessionData] = useState(null);
+  const [joined, setJoined] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  const localVideoRef = useRef(null);
+  const remoteVideoRef = useRef(null);
+  const peerRef = useRef(null);
+  const socketRef = useRef(null);
+  const localStreamRef = useRef(null);
+
+  useEffect(() => {
+    const fetchSession = async () => {
+      try {
+        const res = await axios.get(
+          `https://live-session-platform.onrender.com/live-session/student/session/${unique_id}`
+        );
+        setSessionData(res.data.data);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchSession();
+  }, [unique_id]);
+
+  const handleJoinSession = async () => {
+    if (!sessionData) return;
+
+    setJoined(true);
+    const socket = io("https://live-session-platform.onrender.com");
+    socketRef.current = socket;
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true,
+      });
+      localStreamRef.current = stream;
+      localVideoRef.current.srcObject = stream;
+
+      const pc = new RTCPeerConnection();
+      peerRef.current = pc;
+
+      stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+
+      pc.ontrack = (event) => {
+        remoteVideoRef.current.srcObject = event.streams[0];
+      };
+
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          socket.emit("ice-candidate", {
+            candidate: event.candidate,
+            sessionId: sessionData.unique_id,
+          });
+        }
+      };
+
+      socket.emit("join-session", sessionData.unique_id);
+
+      socket.on("offer", async ({ offer }) => {
+        await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        socket.emit("answer", {
+          sessionId: sessionData.unique_id,
+          answer,
+        });
+      });
+
+      socket.on("ice-candidate", async ({ candidate }) => {
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (err) {
+          console.error(err);
+        }
+      });
+    } catch (err) {
+      alert("Please allow camera and microphone access!");
+      console.error(err);
+    }
+  };
+
+  if (loading)
+    return <h2 className="text-center text-lg mt-10">Loading session...</h2>;
+
+  if (!sessionData)
+    return (
+      <h2 className="text-center text-red-500 mt-10">
+        Session not found or expired.
+      </h2>
+    );
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100">
+      <div className="bg-white shadow-lg rounded-2xl p-6 w-full max-w-xl text-center">
+        {!joined ? (
+          <>
+            <h1 className="text-3xl font-bold mb-2">Join Live Session</h1>
+            <p className="text-gray-600 mb-5">
+              You are invited to join <b>{sessionData.type}</b>’s session.
+            </p>
+            <button
+              onClick={handleJoinSession}
+              className="bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold"
+            >
+              Join Now
+            </button>
+          </>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-3 mt-5">
+              <video
+                ref={localVideoRef}
+                autoPlay
+                muted
+                playsInline
+                className="rounded-lg bg-black w-full h-48 object-cover"
+              />
+              <video
+                ref={remoteVideoRef}
+                autoPlay
+                playsInline
+                className="rounded-lg bg-black w-full h-48 object-cover"
+              />
+            </div>
+
+            <Link
+              to="/"
+              className="block mt-6 text-center bg-gray-200 px-6 py-3 rounded-lg font-semibold"
             >
               Leave Session
             </Link>
