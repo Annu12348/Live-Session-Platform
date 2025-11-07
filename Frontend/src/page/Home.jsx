@@ -135,7 +135,6 @@ const Home = () => {
                   className="border-r-2 outline-none py-2 border-zinc-100 w-full bg-transparent"
                   value={session.userurl}
                   readOnly
-                  onClick={() => window.open(session.userurl, "_blank")}
                 />
                 <button
                   className="pl-3 uppercase font-semibold text-blue-600 hover:underline"
