@@ -257,8 +257,8 @@ const Home = () => {
       pc.onicecandidate = (event) => {
         if (event.candidate) {
           socket.emit("ice-candidate", {
-            candidate: event.candidate,
             sessionId: session.unique_id,
+            candidate: event.candidate,
           });
         }
       };
