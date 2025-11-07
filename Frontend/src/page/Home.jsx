@@ -25,9 +25,15 @@ const Home = () => {
   const localStreamRef = useRef(null);
   const peerRef = useRef(null);
 
+  // Initialize socket
   useEffect(() => {
     const newSocket = io("https://live-session-platform.onrender.com");
     setSocket(newSocket);
+
+    newSocket.on("student-camera-toggle", ({ isCameraOn }) => {
+      // Remote student's camera off/on
+      if (!isCameraOn) remoteVideoRef.current.srcObject = null;
+    });
 
     return () => {
       newSocket.disconnect();
@@ -49,10 +55,10 @@ const Home = () => {
       );
 
       setSession(res.data.data);
-      alert("Session created successfully!");
+      alert("✅ Session created successfully!");
     } catch (err) {
       console.error(err);
-      alert("Failed to create session.");
+      alert("❌ Failed to create session.");
     } finally {
       setLoading(false);
     }
@@ -117,26 +123,47 @@ const Home = () => {
     alert("Copied to clipboard!");
   };
 
+  // Controls
   const toggleMute = () => {
     localStreamRef.current.getAudioTracks().forEach(
       (track) => (track.enabled = !track.enabled)
     );
     setMuted(!muted);
   };
-  const toggleCamera = () => {
-    localStreamRef.current.getVideoTracks().forEach(
-      (track) => (track.enabled = !track.enabled)
-    );
-    setCameraOff(!cameraOff);
+
+  const toggleCamera = async () => {
+    if (!localStreamRef.current) return;
+
+    const videoTrack = localStreamRef.current.getVideoTracks()[0];
+    if (!videoTrack) return;
+
+    if (cameraOff) {
+      // Turn camera ON
+      videoTrack.enabled = true;
+      localVideoRef.current.srcObject = null;
+      localVideoRef.current.srcObject = localStreamRef.current;
+    } else {
+      // Turn camera OFF
+      videoTrack.enabled = false;
+    }
+
+    const newState = !cameraOff;
+    setCameraOff(newState);
+
+    // Notify student
+    socket.emit("teacher-camera-toggle", { isCameraOn: !newState });
   };
+
   const togglePlay = () => {
     if (playing) localVideoRef.current.pause();
     else localVideoRef.current.play();
     setPlaying(!playing);
   };
+
   const toggleFullScreen = (ref) => {
     if (ref.current.requestFullscreen) ref.current.requestFullscreen();
   };
+
   const endSession = () => {
     if (peerRef.current) peerRef.current.close();
     if (localStreamRef.current)
@@ -147,7 +174,8 @@ const Home = () => {
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4">
       <div className="bg-white shadow-xl rounded-2xl p-6 w-full max-w-4xl text-center">
-        <h1 className="text-3xl font-bold mb-4">🎥 Start Live Session</h1>
+        <h1 className="text-3xl font-bold mb-4">🎥 Teacher Live Session</h1>
+
         {!session && (
           <button
             onClick={handleStartSession}
@@ -185,7 +213,6 @@ const Home = () => {
               </button>
             </div>
 
-           
             <div className="relative mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
               {[localVideoRef, remoteVideoRef].map((ref, i) => (
                 <div key={i} className="relative">
@@ -199,7 +226,7 @@ const Home = () => {
                 </div>
               ))}
 
-            
+              {/* Floating Control Bar */}
               <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black/50 p-3 rounded-xl flex gap-5 justify-center items-center">
                 <button onClick={toggleMute} className="text-white text-xl">
                   {muted ? <FaVolumeMute /> : <FaVolumeUp />}
