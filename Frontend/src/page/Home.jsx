@@ -1,7 +1,4 @@
 import React, { useEffect, useRef, useState } from "react";
-import { FaPlay } from "react-icons/fa";
-import { AiOutlineSound } from "react-icons/ai";
-import { MdOutlineCloseFullscreen } from "react-icons/md";
 import axios from "axios";
 import { io } from "socket.io-client";
 
@@ -23,7 +20,7 @@ const Home = () => {
       newSocket.disconnect();
       if (peerRef.current) peerRef.current.close();
       if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach(track => track.stop());
+        localStreamRef.current.getTracks().forEach((track) => track.stop());
       }
     };
   }, []);
@@ -43,7 +40,6 @@ const Home = () => {
         }
       );
 
-      console.log(response.data.data)
       setSession(response.data.data);
       alert("✅ Session created successfully!");
     } catch (error) {
@@ -58,7 +54,6 @@ const Home = () => {
     if (!socket || !session) return;
 
     try {
-      // Ask for camera & mic access
       const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
         audio: true,
@@ -70,16 +65,13 @@ const Home = () => {
       const pc = new RTCPeerConnection();
       peerRef.current = pc;
 
-      // Add local tracks to peer connection
-      stream.getTracks().forEach(track => pc.addTrack(track, stream));
+      stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
-      // Handle remote stream
-      pc.ontrack = event => {
+      pc.ontrack = (event) => {
         remoteVideoRef.current.srcObject = event.streams[0];
       };
 
-      // Send ICE candidates to server
-      pc.onicecandidate = event => {
+      pc.onicecandidate = (event) => {
         if (event.candidate) {
           socket.emit("ice-candidate", {
             candidate: event.candidate,
@@ -88,7 +80,6 @@ const Home = () => {
         }
       };
 
-      // Listen for ICE candidates from student
       const handleIce = async ({ candidate }) => {
         try {
           await pc.addIceCandidate(new RTCIceCandidate(candidate));
@@ -98,27 +89,17 @@ const Home = () => {
       };
       socket.on("ice-candidate", handleIce);
 
-      // Listen for answer from student
       const handleAnswer = async ({ answer }) => {
         await pc.setRemoteDescription(new RTCSessionDescription(answer));
       };
       socket.on("answer", handleAnswer);
 
-      // Create offer
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       socket.emit("offer", { sessionId: session.unique_id, offer });
-
-      // Cleanup socket listeners on unmount
-      return () => {
-        socket.off("answer", handleAnswer);
-        socket.off("ice-candidate", handleIce);
-      };
     } catch (err) {
       if (err.name === "NotAllowedError") {
-        alert(
-          "❌ Please allow access to camera and microphone to start the session!"
-        );
+        alert("❌ Please allow access to camera and microphone!");
       } else {
         console.error(err);
       }
@@ -141,31 +122,23 @@ const Home = () => {
           className="text-md mt-6 uppercase bg-blue-600 cursor-pointer px-4 py-3 font-bold text-white rounded-lg"
           disabled={loading}
         >
-          {loading ? (
-            <div className="w-4 h-4 animate-spin border-white border-t-3 border-b-3 rounded-full "></div>
-          ) : (
-            "Start Session"
-          )}
+          {loading ? "Creating..." : "Start Session"}
         </button>
 
         {session?.unique_id && (
           <>
             <div className="w-full mt-7">
-              <label className="leading-none capitalize font-bold text-md">
-                Session URL
-              </label>
+              <label className="font-bold text-md">Session URL</label>
               <div className="flex border border-zinc-100 pr-3 pl-1.5 rounded-lg items-center">
                 <input
                   type="url"
-                  placeholder="Session URL"
                   className="border-r-2 outline-none py-2 border-zinc-100 w-full bg-transparent"
                   value={session.userurl}
                   readOnly
-                  onClick={() => window.location.href = session.userurl}
-                  style={{ cursor: "pointer" }}
+                  onClick={() => window.open(session.userurl, "_blank")}
                 />
                 <button
-                  className="pl-3 mt-0 uppercase font-semibold text-blue-600 hover:underline"
+                  className="pl-3 uppercase font-semibold text-blue-600 hover:underline"
                   onClick={handleCopy}
                   type="button"
                 >
@@ -202,8 +175,3 @@ const Home = () => {
 };
 
 export default Home;
-
-
-//1:41 to 2:41
-//3:35 to  4.23
-//10:00 to 
