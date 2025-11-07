@@ -5,7 +5,7 @@ export const liveSessionController = async (req, res) => {
   try {
     const { type } = req.body;
     const unique_id = uuidv4();
-    const userurl = `http://localhost:3000/session/${unique_id}`;
+    const userurl = `http://localhost:5173/session/${unique_id}`;
 
     if (!type) {
         return res.status(400).json({
