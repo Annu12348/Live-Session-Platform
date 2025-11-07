@@ -1,8 +1,11 @@
 import express from "express";
-import routesLiveSession from "./routes/liveSession.routes.js"
+import routesLiveSession from "./routes/liveSession.routes.js";
+import cors from "cors";
 const app = express();
 
-app.use(express.json())
-app.use("/live-session", routesLiveSession)
+app.use(cors())
+app.use(express.json());
+
+app.use("/live-session", routesLiveSession);
 
 export default app;

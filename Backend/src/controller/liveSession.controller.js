@@ -67,7 +67,7 @@ export const getLiveSessionController = async (req, res) => {
 
     res.status(200).json({
         success: true,
-        message: "hello world",
+        message: "Live session fetched successfully.",
         data: sessions
     })
   } catch (error) {

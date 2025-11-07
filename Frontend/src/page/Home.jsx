@@ -1,45 +1,197 @@
-import React, { useState } from "react";
+{/*import React, { useEffect, useRef, useState } from "react";
 import { FaPlay } from "react-icons/fa";
 import { AiOutlineSound } from "react-icons/ai";
 import { MdOutlineCloseFullscreen } from "react-icons/md";
-import { Link } from "react-router-dom";
+import axios from "axios";
+import { io } from "socket.io-client";
 
 const Home = () => {
-  const [ input, setInput ] = useState({
-    values: "https://yourapp.com/session/abc123xyz"
-  })
+  const [loading, setLoading] = useState(false);
+  const [session, setSession] = useState(null);
+  const [socket, setSocket] = useState(null);
+  const [peer, setPeer] = useState(null);
+  console.log(session)
+
+  const localVideoRef = useRef(null);
+  const remoteVideoRef = useRef(null);
+  const localStreamRef = useRef(null);
+
+  useEffect(() => {
+    const newSocket = io("http://localhost:3000");
+    setSocket(newSocket);
+
+    return () => {
+      newSocket.disconnect();
+    };
+  }, []);
+
+  const handleStartSession = async () => {
+    try {
+      setLoading(true);
+
+      const unique_id = Math.random().toString(36).substring(2, 10);
+      const userurl = `https://yourapp.com/session/${unique_id}`;
+
+      const response = await axios.post(
+        "http://localhost:3000/live-session/teacher/start-session",
+        {
+          type: "teacher",
+          unique_id,
+          userurl,
+        }
+      );
+      console.log(response.data.data);
+      setSession(response.data.data);
+      alert("✅ Session created successfully!");
+      //navigate(`/session/${unique_id}`)
+    } catch (error) {
+      console.error(error);
+      alert("❌ Failed to create session.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const startVideoCall = async () => {
+    if (!socket || !session) return;
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true
+      })
+
+      localStreamRef.current = stream;
+      localVideoRef.current.srcObject = stream;
+
+      const pc = new RTCPeerConnection();
+      stream.getTracks().forEach((track) => pc.addTrack(track, stream))
+      setPeer(pc);
+
+      pc.ontrack = (event) => {
+        remoteVideoRef.current.srcObject = event.streams[0];
+      }
+
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          socket.emit("ice-candidate", {
+            candidate: event.candidate,
+            sessionId: session.unique_id
+          });
+        }
+      };
+
+      const handleAnswer = async ({ answer }) => {
+        await pc.setRemoteDescription(new RTCSessionDescription(answer))
+      }
+
+      socket.on("answer", handleAnswer);
+
+
+
+      const handleIce = async ({ candidate }) => {
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate))
+        } catch (err) {
+          console.error(err);
+        }
+      }
+      socket.on("ice-candidate", handleIce)
+
+      return () => {
+        socket.off("answer", handleAnswer);
+        socket.off("ice-candidate", handleIce);
+      }
+    } catch (error) {
+      console.error(error)
+    }
+  }
+
+  const handleCopy = () => {
+    if (session && session.userurl) {
+      navigator.clipboard.writeText(session.userurl);
+      alert("Copied to clipboard!");
+    }
+  };
+
   return (
-    <div className="w-full h-full  items-center justify-center p-5 flex  ">
-      <div className="shadow bg-zinc-50 w-[35%] py-3 pb-5 px-5 flex flex-col items-center justify-center rounded-lg ">
-        <h1 className="text-5xl font-bold  capitalize  ">start live session</h1>
-        <Link to='/session/abc2345' className="text-md mt-6 uppercase bg-blue-600 cursor-pointer px-4 py-3 font-bold text-white rounded-lg  ">
-          start session
-        </Link>
-        <div className="w-full mt-7 ">
-          <label className="leading-none capitalize font-bold text-md ">
-            session URL
-          </label>
-          <div className="flex border border-zinc-100 pr-3 pl-1.5 rounded-lg   ">
-            <input
-              type="url"
-              placeholder="Enter session URL"
-              className="border-r-2 outline-none  py-2 border-zinc-100  w-full"
-              value={input.values}
-            />
-            <h1 className=" pl-3 mt-2 uppercase font-semibold ">copy</h1>
+    <div className="w-full h-full items-center justify-center p-5 flex">
+      <div className="shadow bg-zinc-50 w-full max-w-xl py-3 pb-5 px-5 flex flex-col items-center justify-center rounded-lg">
+        <h1 className="text-5xl font-bold capitalize">Start Live Session</h1>
+        <button
+          onClick={handleStartSession}
+          className="text-md mt-6 uppercase bg-blue-600 cursor-pointer px-4 py-3 font-bold text-white rounded-lg"
+          disabled={loading}
+        >
+          {loading ? (
+            <div className="w-4 h-4 animate-spin border-white border-t-3 border-b-3 rounded-full "></div>
+          ) : (
+            "Start Session"
+          )}
+        </button>
+        {session?.unique_id && (
+          <div className="w-full mt-7">
+            <label className="leading-none capitalize font-bold text-md">
+              Session URL
+            </label>
+            <div className="flex border border-zinc-100 pr-3 pl-1.5 rounded-lg items-center">
+              <input
+                type="url"
+                placeholder="Session URL"
+                className="border-r-2 outline-none py-2 border-zinc-100 w-full bg-transparent"
+                value={session?.userurl}
+                readOnly
+                onClick={() => {
+                  if (session?.userurl) {
+                    window.location.href = session.userurl; // redirect to student page
+                  }
+                }}
+                style={{ cursor: "pointer" }}
+              />
+              <button
+                className="pl-3 mt-0 uppercase font-semibold text-blue-600 hover:underline"
+                onClick={handleCopy}
+                type="button"
+              >
+                Copy
+              </button>
+            </div>
+
+
+            <button
+              onClick={startVideoCall}
+              className="mt-4 bg-green-600 text-white px-4 py-2 rounded-lg"
+            >
+              Start Video Call
+            </button>
+
+            <div className="mt-4 w-full flex gap-2">
+              <video
+                ref={localVideoRef}
+                autoPlay
+                muted
+                className="w-1/2 rounded-lg"
+              ></video>
+              <video
+                ref={remoteVideoRef}
+                autoPlay
+                className="w-1/2 rounded-lg"
+              ></video>
+            </div>
           </div>
-        </div>
+        )}
+
         <div className="w-full bg-black h-[15vh] flex items-end p-4 rounded-lg shadow-lg mt-5">
-          <div className="w-full flex items-center justify-between ">
-            <span className="text-white ">
+          <div className="w-full flex items-center justify-between">
+            <span className="text-white">
               <FaPlay />
             </span>
-            <div className="w-[70%] bg-zinc-300 h-1 rounded-lg "></div>
-            <span className="text-white text-xl ">
+            <div className="w-[70%] bg-zinc-300 h-1 rounded-lg"></div>
+            <span className="text-white text-xl">
               <AiOutlineSound />
             </span>
-            <div className="w-[8%] bg-zinc-700 rounded-lg h-1 "></div>
-            <span className="text-white text-xl ">
+            <div className="w-[8%] bg-zinc-700 rounded-lg h-1"></div>
+            <span className="text-white text-xl">
               <MdOutlineCloseFullscreen />
             </span>
           </div>
@@ -49,7 +201,213 @@ const Home = () => {
   );
 };
 
+export default Home;*/}
+
+import React, { useEffect, useRef, useState } from "react";
+import { FaPlay } from "react-icons/fa";
+import { AiOutlineSound } from "react-icons/ai";
+import { MdOutlineCloseFullscreen } from "react-icons/md";
+import axios from "axios";
+import { io } from "socket.io-client";
+
+const Home = () => {
+  const [loading, setLoading] = useState(false);
+  const [session, setSession] = useState(null);
+  const [socket, setSocket] = useState(null);
+
+  const localVideoRef = useRef(null);
+  const remoteVideoRef = useRef(null);
+  const localStreamRef = useRef(null);
+  const peerRef = useRef(null);
+
+  useEffect(() => {
+    const newSocket = io("http://localhost:3000");
+    setSocket(newSocket);
+
+    return () => {
+      newSocket.disconnect();
+      if (peerRef.current) peerRef.current.close();
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, []);
+
+  const handleStartSession = async () => {
+    try {
+      setLoading(true);
+      const unique_id = Math.random().toString(36).substring(2, 10);
+      const userurl = `http://localhost:5173/session/${unique_id}`;
+
+      const response = await axios.post(
+        "http://localhost:3000/live-session/teacher/start-session",
+        {
+          type: "teacher",
+          unique_id,
+          userurl,
+        }
+      );
+
+      setSession(response.data.data);
+      alert("✅ Session created successfully!");
+    } catch (error) {
+      console.error(error);
+      alert("❌ Failed to create session.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const startVideoCall = async () => {
+    if (!socket || !session) return;
+
+    try {
+      // Ask for camera & mic access
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true,
+      });
+
+      localStreamRef.current = stream;
+      localVideoRef.current.srcObject = stream;
+
+      const pc = new RTCPeerConnection();
+      peerRef.current = pc;
+
+      // Add local tracks to peer connection
+      stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
+      // Handle remote stream
+      pc.ontrack = event => {
+        remoteVideoRef.current.srcObject = event.streams[0];
+      };
+
+      // Send ICE candidates to server
+      pc.onicecandidate = event => {
+        if (event.candidate) {
+          socket.emit("ice-candidate", {
+            candidate: event.candidate,
+            sessionId: session.unique_id,
+          });
+        }
+      };
+
+      // Listen for ICE candidates from student
+      const handleIce = async ({ candidate }) => {
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (err) {
+          console.error(err);
+        }
+      };
+      socket.on("ice-candidate", handleIce);
+
+      // Listen for answer from student
+      const handleAnswer = async ({ answer }) => {
+        await pc.setRemoteDescription(new RTCSessionDescription(answer));
+      };
+      socket.on("answer", handleAnswer);
+
+      // Create offer
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      socket.emit("offer", { sessionId: session.unique_id, offer });
+
+      // Cleanup socket listeners on unmount
+      return () => {
+        socket.off("answer", handleAnswer);
+        socket.off("ice-candidate", handleIce);
+      };
+    } catch (err) {
+      if (err.name === "NotAllowedError") {
+        alert(
+          "❌ Please allow access to camera and microphone to start the session!"
+        );
+      } else {
+        console.error(err);
+      }
+    }
+  };
+
+  const handleCopy = () => {
+    if (session?.userurl) {
+      navigator.clipboard.writeText(session.userurl);
+      alert("Copied to clipboard!");
+    }
+  };
+
+  return (
+    <div className="w-full h-full items-center justify-center p-5 flex">
+      <div className="shadow bg-zinc-50 w-full max-w-xl py-3 pb-5 px-5 flex flex-col items-center justify-center rounded-lg">
+        <h1 className="text-5xl font-bold capitalize">Start Live Session</h1>
+        <button
+          onClick={handleStartSession}
+          className="text-md mt-6 uppercase bg-blue-600 cursor-pointer px-4 py-3 font-bold text-white rounded-lg"
+          disabled={loading}
+        >
+          {loading ? (
+            <div className="w-4 h-4 animate-spin border-white border-t-3 border-b-3 rounded-full "></div>
+          ) : (
+            "Start Session"
+          )}
+        </button>
+
+        {session?.unique_id && (
+          <>
+            <div className="w-full mt-7">
+              <label className="leading-none capitalize font-bold text-md">
+                Session URL
+              </label>
+              <div className="flex border border-zinc-100 pr-3 pl-1.5 rounded-lg items-center">
+                <input
+                  type="url"
+                  placeholder="Session URL"
+                  className="border-r-2 outline-none py-2 border-zinc-100 w-full bg-transparent"
+                  value={session.userurl}
+                  readOnly
+                  onClick={() => window.location.href = session.userurl}
+                  style={{ cursor: "pointer" }}
+                />
+                <button
+                  className="pl-3 mt-0 uppercase font-semibold text-blue-600 hover:underline"
+                  onClick={handleCopy}
+                  type="button"
+                >
+                  Copy
+                </button>
+              </div>
+
+              <button
+                onClick={startVideoCall}
+                className="mt-4 bg-green-600 text-white px-4 py-2 rounded-lg"
+              >
+                Start Video Call
+              </button>
+
+              <div className="mt-4 w-full flex gap-2">
+                <video
+                  ref={localVideoRef}
+                  autoPlay
+                  muted
+                  className="w-1/2 rounded-lg"
+                />
+                <video
+                  ref={remoteVideoRef}
+                  autoPlay
+                  className="w-1/2 rounded-lg"
+                />
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
 export default Home;
-//12:00 to 12:30 = 30Minat
-//4:00 to 5:50 = 1:50Minat
-//11:30 to 
+
+
+//1:41 to 2:41
+//3:35 to  4.23
+//10:00 to 
