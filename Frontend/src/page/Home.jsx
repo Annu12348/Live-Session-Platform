@@ -19,7 +19,7 @@ const Home = () => {
   const [muted, setMuted] = useState(false);
   const [playing, setPlaying] = useState(true);
   const [cameraOff, setCameraOff] = useState(false);
-  const [videoStarted, setVideoStarted] = useState(false); // NEW
+  const [videoDivVisible, setVideoDivVisible] = useState(false); // New state
 
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
@@ -67,8 +67,6 @@ const Home = () => {
   const startVideoCall = async () => {
     if (!socket || !session) return;
 
-    setVideoStarted(true); // UI will now show video grid
-
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
@@ -114,6 +112,8 @@ const Home = () => {
           console.error(err);
         }
       });
+
+      setVideoDivVisible(true); // Show video div below button
     } catch (err) {
       alert("Please allow camera & microphone access.");
       console.error(err);
@@ -140,7 +140,6 @@ const Home = () => {
 
     if (cameraOff) {
       videoTrack.enabled = true;
-      localVideoRef.current.srcObject = null;
       localVideoRef.current.srcObject = localStreamRef.current;
     } else {
       videoTrack.enabled = false;
@@ -149,6 +148,7 @@ const Home = () => {
 
     const newState = !cameraOff;
     setCameraOff(newState);
+
     socket.emit("teacher-camera-toggle", { isCameraOn: !newState });
   };
 
@@ -178,7 +178,6 @@ const Home = () => {
     if (peerRef.current) peerRef.current.close();
     if (localStreamRef.current)
       localStreamRef.current.getTracks().forEach((t) => t.stop());
-    setVideoStarted(false); // reset UI
     window.location.reload();
   };
 
@@ -197,69 +196,72 @@ const Home = () => {
           </button>
         )}
 
-        {session && !videoStarted && (
-          <div className="mt-4">
-            <label className="font-semibold">Session Link</label>
-            <div className="flex mt-2 border rounded-lg overflow-hidden">
-              <input
-                type="text"
-                readOnly
-                value={session.userurl}
-                className="flex-1 px-3 py-2 outline-none"
-              />
-              <button
-                onClick={handleCopy}
-                className="bg-gray-200 px-4 font-semibold"
-              >
-                Copy
-              </button>
-            </div>
-
-            <button
-              onClick={startVideoCall}
-              className="mt-4 bg-green-600 text-white px-6 py-3 rounded-lg font-semibold"
-            >
-              Start Video
-            </button>
-          </div>
-        )}
-
-        {session && videoStarted && (
-          <div className="relative mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-            {[localVideoRef, remoteVideoRef].map((ref, i) => (
-              <div key={i} className="relative">
-                <video
-                  ref={ref}
-                  autoPlay
-                  playsInline
-                  muted={i === 0}
-                  className="rounded-lg bg-black w-full h-60 md:h-80 object-cover"
+        {session && (
+          <>
+            <div className="mt-4">
+              <label className="font-semibold">Session Link</label>
+              <div className="flex mt-2 border rounded-lg overflow-hidden">
+                <input
+                  type="text"
+                  readOnly
+                  value={session.userurl}
+                  className="flex-1 px-3 py-2 outline-none"
                 />
+                <button
+                  onClick={handleCopy}
+                  className="bg-gray-200 px-4 font-semibold"
+                >
+                  Copy
+                </button>
               </div>
-            ))}
 
-            {/* Floating Control Bar */}
-            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black/50 p-3 rounded-xl flex gap-5 justify-center items-center">
-              <button onClick={toggleMute} className="text-white text-xl">
-                {muted ? <FaVolumeMute /> : <FaVolumeUp />}
-              </button>
-              <button onClick={toggleCamera} className="text-white text-xl">
-                {cameraOff ? <FaVideoSlash /> : <FaVideo />}
-              </button>
-              <button onClick={togglePlay} className="text-white text-xl">
-                {playing ? <FaPause /> : <FaPlay />}
-              </button>
               <button
-                onClick={() => toggleFullScreen(localVideoRef)}
-                className="text-white text-xl"
+                onClick={startVideoCall}
+                className="mt-4 bg-green-600 text-white px-6 py-3 rounded-lg font-semibold"
               >
-                <FaExpand />
-              </button>
-              <button onClick={endSession} className="text-red-500 text-xl">
-                <FaPhoneSlash />
+                Start Video
               </button>
             </div>
-          </div>
+
+            {/* Video calling div */}
+            {videoDivVisible && (
+              <div className="relative mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                {[localVideoRef, remoteVideoRef].map((ref, i) => (
+                  <div key={i} className="relative">
+                    <video
+                      ref={ref}
+                      autoPlay
+                      playsInline
+                      muted={i === 0}
+                      className="rounded-lg bg-black w-full h-60 md:h-80 object-cover"
+                    />
+                  </div>
+                ))}
+
+                {/* Floating Control Bar */}
+                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black/50 p-3 rounded-xl flex gap-5 justify-center items-center">
+                  <button onClick={toggleMute} className="text-white text-xl">
+                    {muted ? <FaVolumeMute /> : <FaVolumeUp />}
+                  </button>
+                  <button onClick={toggleCamera} className="text-white text-xl">
+                    {cameraOff ? <FaVideoSlash /> : <FaVideo />}
+                  </button>
+                  <button onClick={togglePlay} className="text-white text-xl">
+                    {playing ? <FaPause /> : <FaPlay />}
+                  </button>
+                  <button
+                    onClick={() => toggleFullScreen(localVideoRef)}
+                    className="text-white text-xl"
+                  >
+                    <FaExpand />
+                  </button>
+                  <button onClick={endSession} className="text-red-500 text-xl">
+                    <FaPhoneSlash />
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
