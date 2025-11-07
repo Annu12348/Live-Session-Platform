@@ -19,7 +19,6 @@ const Home = () => {
   const [muted, setMuted] = useState(false);
   const [playing, setPlaying] = useState(true);
   const [cameraOff, setCameraOff] = useState(false);
-  const [videoDivVisible, setVideoDivVisible] = useState(false); // New state
 
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
@@ -31,6 +30,7 @@ const Home = () => {
     const newSocket = io("https://live-session-platform.onrender.com");
     setSocket(newSocket);
 
+    // Student camera toggle listener
     newSocket.on("student-camera-toggle", ({ isCameraOn }) => {
       if (!isCameraOn) remoteVideoRef.current.srcObject = null;
     });
@@ -112,8 +112,6 @@ const Home = () => {
           console.error(err);
         }
       });
-
-      setVideoDivVisible(true); // Show video div below button
     } catch (err) {
       alert("Please allow camera & microphone access.");
       console.error(err);
@@ -139,16 +137,20 @@ const Home = () => {
     if (!videoTrack) return;
 
     if (cameraOff) {
+      // Camera ON
       videoTrack.enabled = true;
+      localVideoRef.current.srcObject = null;
       localVideoRef.current.srcObject = localStreamRef.current;
     } else {
+      // Camera OFF
       videoTrack.enabled = false;
-      localVideoRef.current.srcObject = null;
+      localVideoRef.current.srcObject = null; // hide teacher video
     }
 
     const newState = !cameraOff;
     setCameraOff(newState);
 
+    // Notify student
     socket.emit("teacher-camera-toggle", { isCameraOn: !newState });
   };
 
@@ -167,6 +169,7 @@ const Home = () => {
       document.exitFullscreen().catch((err) => console.error(err));
     }
 
+    // Fix video freeze after fullscreen exit
     setTimeout(() => {
       if (ref.current && ref.current.paused) {
         ref.current.play().catch(() => {});
@@ -223,44 +226,41 @@ const Home = () => {
               </button>
             </div>
 
-            {/* Video calling div */}
-            {videoDivVisible && (
-              <div className="relative mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-                {[localVideoRef, remoteVideoRef].map((ref, i) => (
-                  <div key={i} className="relative">
-                    <video
-                      ref={ref}
-                      autoPlay
-                      playsInline
-                      muted={i === 0}
-                      className="rounded-lg bg-black w-full h-60 md:h-80 object-cover"
-                    />
-                  </div>
-                ))}
-
-                {/* Floating Control Bar */}
-                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black/50 p-3 rounded-xl flex gap-5 justify-center items-center">
-                  <button onClick={toggleMute} className="text-white text-xl">
-                    {muted ? <FaVolumeMute /> : <FaVolumeUp />}
-                  </button>
-                  <button onClick={toggleCamera} className="text-white text-xl">
-                    {cameraOff ? <FaVideoSlash /> : <FaVideo />}
-                  </button>
-                  <button onClick={togglePlay} className="text-white text-xl">
-                    {playing ? <FaPause /> : <FaPlay />}
-                  </button>
-                  <button
-                    onClick={() => toggleFullScreen(localVideoRef)}
-                    className="text-white text-xl"
-                  >
-                    <FaExpand />
-                  </button>
-                  <button onClick={endSession} className="text-red-500 text-xl">
-                    <FaPhoneSlash />
-                  </button>
+            <div className="relative mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+              {[localVideoRef, remoteVideoRef].map((ref, i) => (
+                <div key={i} className="relative">
+                  <video
+                    ref={ref}
+                    autoPlay
+                    playsInline
+                    muted={i === 0}
+                    className="rounded-lg bg-black w-full h-60 md:h-80 object-cover"
+                  />
                 </div>
+              ))}
+
+              {/* Floating Control Bar */}
+              <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black/50 p-3 rounded-xl flex gap-5 justify-center items-center">
+                <button onClick={toggleMute} className="text-white text-xl">
+                  {muted ? <FaVolumeMute /> : <FaVolumeUp />}
+                </button>
+                <button onClick={toggleCamera} className="text-white text-xl">
+                  {cameraOff ? <FaVideoSlash /> : <FaVideo />}
+                </button>
+                <button onClick={togglePlay} className="text-white text-xl">
+                  {playing ? <FaPause /> : <FaPlay />}
+                </button>
+                <button
+                  onClick={() => toggleFullScreen(localVideoRef)}
+                  className="text-white text-xl"
+                >
+                  <FaExpand />
+                </button>
+                <button onClick={endSession} className="text-red-500 text-xl">
+                  <FaPhoneSlash />
+                </button>
               </div>
-            )}
+            </div>
           </>
         )}
       </div>
@@ -268,4 +268,4 @@ const Home = () => {
   );
 };
 
-export default Home;
+export default Home; 
