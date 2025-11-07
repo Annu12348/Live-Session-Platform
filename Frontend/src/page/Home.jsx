@@ -30,8 +30,8 @@ const Home = () => {
     const newSocket = io("https://live-session-platform.onrender.com");
     setSocket(newSocket);
 
+    // Student camera toggle listener
     newSocket.on("student-camera-toggle", ({ isCameraOn }) => {
-      // Remote student's camera off/on
       if (!isCameraOn) remoteVideoRef.current.srcObject = null;
     });
 
@@ -131,20 +131,20 @@ const Home = () => {
     setMuted(!muted);
   };
 
-  const toggleCamera = async () => {
+  const toggleCamera = () => {
     if (!localStreamRef.current) return;
-
     const videoTrack = localStreamRef.current.getVideoTracks()[0];
     if (!videoTrack) return;
 
     if (cameraOff) {
-      // Turn camera ON
+      // Camera ON
       videoTrack.enabled = true;
       localVideoRef.current.srcObject = null;
       localVideoRef.current.srcObject = localStreamRef.current;
     } else {
-      // Turn camera OFF
+      // Camera OFF
       videoTrack.enabled = false;
+      localVideoRef.current.srcObject = null; // hide teacher video
     }
 
     const newState = !cameraOff;
@@ -161,7 +161,20 @@ const Home = () => {
   };
 
   const toggleFullScreen = (ref) => {
-    if (ref.current.requestFullscreen) ref.current.requestFullscreen();
+    if (!ref.current) return;
+
+    if (!document.fullscreenElement) {
+      ref.current.requestFullscreen().catch((err) => console.error(err));
+    } else {
+      document.exitFullscreen().catch((err) => console.error(err));
+    }
+
+    // Fix video freeze after fullscreen exit
+    setTimeout(() => {
+      if (ref.current && ref.current.paused) {
+        ref.current.play().catch(() => {});
+      }
+    }, 100);
   };
 
   const endSession = () => {
